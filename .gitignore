@@ -1,0 +1,10 @@
+# Compiled C/C++ binaries and object files
+Eixo 1/prevencaoVotoDuplo
+*.o
+*.out
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
