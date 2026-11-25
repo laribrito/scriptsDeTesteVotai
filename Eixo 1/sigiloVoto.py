@@ -116,7 +116,7 @@ class CheckResult:
 
 
 # ==============================================================================
-# Camada Criptográfica e Submissão Legítima (3 camadas do VotaAí)
+# Camada Criptográfica e Submissão Legítima (3 camadas do Vota-i 2.0)
 # ==============================================================================
 def carregar_chave_api(se_keys_path: Path = SE_KEYS_PATH) -> rsa.RSAPublicKey:
     """Lê VotaAI_SecureKey_2 do arquivo se_keys_info.json e reconstrói a chave RSA."""

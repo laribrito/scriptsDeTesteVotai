@@ -3,7 +3,7 @@
  *
  * Implementação nativa em C++20 com paralelismo real via std::thread,
  * sincronização por std::barrier e Last-Byte Sync (TCP_NODELAY) sobre sockets POSIX,
- * utilizando OpenSSL 3.x para as 3 camadas criptográficas do VotaAí.
+ * utilizando OpenSSL 3.x para as 3 camadas criptográficas do Vota-i 2.0.
  *
  * Compilação:
  *   g++ -std=c++20 -O2 -Wall -pthread prevencaoVotoDuplo.cpp -o prevencaoVotoDuplo -lssl -lcrypto

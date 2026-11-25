@@ -5,7 +5,7 @@ Avalia se um observador passivo posicionado na rede local pode inferir o conteú
 voto do eleitor a partir do tamanho dos pacotes de dados transmitidos sob o canal TLS ativo.
 
 Procedimento experimental:
-  1. Emite sucessivos votos legítimos no formato do cliente móvel VotaAí para opções de
+  1. Emite sucessivos votos legítimos no formato do cliente móvel Vota-i 2.0 para opções de
      comprimentos nominais distintos:
        - Candidato com nome curto ("Ana")
        - Chapa extensa com múltiplos nomes (~206 bytes)
@@ -972,7 +972,7 @@ class OriginVoteHTTPSServer:
 
 
 # ==============================================================================
-# Criptografia do Cliente VotaAí (réplica byte a byte do App Mobile)
+# Criptografia do Cliente Vota-i 2.0 (réplica byte a byte do App Mobile)
 # ==============================================================================
 def carregar_chave_api_mobile(se_keys_path: Path = SE_KEYS_PATH) -> rsa.RSAPublicKey:
     """Lê VotaAI_SecureKey_2 de se_keys_info.json (blob CNG RSA1 ou PEM)."""
@@ -1773,7 +1773,7 @@ def auditar_fronteiras_padding_c4(
     strict_padding: bool,
 ) -> tuple[CheckResult, dict[str, Any]]:
     """
-    Inspeciona estaticamente o código-fonte do VotaAí (mobile/backend/desktop) e executa
+    Inspeciona estaticamente o código-fonte do Vota-i 2.0 (mobile/backend/desktop) e executa
     sondas reais de fronteira (>245B RSA multi-bloco e nonce variável em AES/GCM/NoPadding).
     """
     findings: list[str] = []
@@ -2440,7 +2440,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--tls-version", choices=("1.3", "1.2", "auto"), default="1.3", help="Versão TLS do canal ativo (padrão: 1.3).")
     p.add_argument("--capture-mode", choices=("auto", "wiretap", "tcpdump"), default="auto", help="Mecanismo de captura de pacotes (padrão: auto).")
     p.add_argument("--interface", default="lo", help="Interface de rede para --capture-mode tcpdump (padrão: lo).")
-    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend Django VotaAí (padrão: {DEFAULT_BACKEND_URL}).")
+    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend Django Vota-i 2.0 (padrão: {DEFAULT_BACKEND_URL}).")
     p.add_argument("--target-host", default=DEFAULT_TARGET_HOST, help=f"Hostname TLS alvo (padrão: {DEFAULT_TARGET_HOST}).")
     p.add_argument("--origin-port", type=int, default=0, help="Porta do Origin HTTPS (padrão: efêmera; 8443 em --serve-https-only).")
     p.add_argument("--tokens", nargs="*", help="Tokens reais de votação para submeter ao backend Django via TLS + captura.")

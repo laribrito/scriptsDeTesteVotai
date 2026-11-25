@@ -211,7 +211,7 @@ def _node_major_version(node_bin: Path) -> int:
 # ==============================================================================
 class RogueAPIServer:
     """
-    Simula a API oficial do VotaAí em porta local efêmera usando um par de chaves
+    Simula a API oficial do Vota-i 2.0 em porta local efêmera usando um par de chaves
     RSA-2048 forjado (distinto de VotaAI_SecureKey_1 e VotaAI_SecureKey_2).
     """
 
@@ -1396,7 +1396,7 @@ def executar_teste_backend_bilateral(backend_url: str, rogue: RogueAPIServer, ke
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Teste 6 (Eixo 2): Ancoragem de Chaves e Public Key Pinning Falso (Camada de Aplicação).")
     p.add_argument("--target", choices=("all", "desktop", "mobile"), default="all", help="Clientes a testar (padrão: all).")
-    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend VotaAí oficial para verificação bilateral (padrão: {DEFAULT_BACKEND_URL}).")
+    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend Vota-i 2.0 oficial para verificação bilateral (padrão: {DEFAULT_BACKEND_URL}).")
     p.add_argument("--skip-backend", action="store_true", help="Pula a verificação opcional C5 contra o backend oficial.")
     p.add_argument("--json-out", type=Path, default=None, help="Grava relatório JSON neste arquivo.")
     return p.parse_args(argv)

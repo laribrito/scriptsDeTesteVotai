@@ -806,7 +806,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Teste 1 (Eixo 2): Resistência a MitM via Burp Suite real.")
     p.add_argument("--burp-proxy", default=DEFAULT_BURP_PROXY, help=f"Proxy Burp Suite (padrão: {DEFAULT_BURP_PROXY}).")
     p.add_argument("--burp-ca", type=Path, default=DEFAULT_BURP_CA, help=f"Certificado CA do Burp (padrão: {DEFAULT_BURP_CA}).")
-    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend VotaAí local (padrão: {DEFAULT_BACKEND_URL}).")
+    p.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help=f"Backend Vota-i 2.0 local (padrão: {DEFAULT_BACKEND_URL}).")
     p.add_argument("--target", choices=("all", "desktop", "mobile"), default="all", help="Clientes a testar (padrão: all).")
     p.add_argument("--target-host", default=DEFAULT_TARGET_HOST, help=f"Hostname alvo HTTPS (padrão: {DEFAULT_TARGET_HOST}).")
     p.add_argument("--mobile-build-type", choices=("release", "debug"), default="release", help="BuildConfig do Android (padrão: release).")
