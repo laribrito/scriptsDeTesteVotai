@@ -422,7 +422,12 @@ def inspect_desktop(path: Path, source_root: Path, ghidra: Path | None) -> tuple
     return check, binaries
 
 
-def inspect_mobile(path: Path, source_root: Path, ghidra: Path | None) -> tuple[CheckResult, list[tuple[str, bytes]]]:
+def inspect_mobile(
+    path: Path,
+    source_root: Path,
+    ghidra: Path | None,
+    lib_filter: list[str] | None = None,
+) -> tuple[CheckResult, list[tuple[str, bytes]]]:
     candidates = candidate_key_values([source_root])
     der_blobs = candidate_der_blobs(candidates)
     scans: list[dict[str, Any]] = []
@@ -449,6 +454,9 @@ def inspect_mobile(path: Path, source_root: Path, ghidra: Path | None) -> tuple[
                 binaries.append((name.replace("/", "_"), raw))
             for block in valid_pem_blocks(raw):
                 strings_markers.append(f"{name}:{block.split(b'-----', 2)[1].decode('ascii')}")
+
+    if lib_filter:
+        binaries = [(n, r) for n, r in binaries if any(f in n for f in lib_filter)]
 
     if ghidra is not None:
         ghidra_results, ghidra_error = run_ghidra(ghidra, binaries)
@@ -528,6 +536,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Executa descompilacao Ghidra Headless dos ELF nativos (etapa potencialmente longa).",
     )
+    parser.add_argument(
+        "--ghidra-lib-filter",
+        nargs="+",
+        default=None,
+        help="Analisa no Ghidra apenas bibliotecas nativas do APK cujo nome contenha algum destes trechos "
+        "(ex.: libseguranca_nativa). Padrao: todas as .so.",
+    )
     parser.add_argument("--json-out", type=Path, default=None)
     return parser.parse_args(argv)
 
@@ -557,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.mobile_apk.is_file():
             print(f"[ERRO] APK Mobile nao encontrado: {args.mobile_apk}", file=sys.stderr)
             return 2
-        checks.append(inspect_mobile(args.mobile_apk, args.mobile_source, ghidra)[0])
+        checks.append(inspect_mobile(args.mobile_apk, args.mobile_source, ghidra, args.ghidra_lib_filter)[0])
 
     verdict = "REPROVADO" if any(check.status == "FALHOU" for check in checks) else (
         "APROVADO" if all(check.status == "PASSOU" for check in checks) else "PARCIAL (COM ALERTAS)"
