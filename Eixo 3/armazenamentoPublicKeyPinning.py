@@ -60,6 +60,76 @@ PLAIN_MARKERS = (
 )
 
 
+PEM_BLOCK_RE = re.compile(
+    rb"-----BEGIN (PUBLIC KEY|RSA PUBLIC KEY|CERTIFICATE)-----"
+    rb"([A-Za-z0-9+/=\s\\]{40,6000}?)"
+    rb"-----END (?:PUBLIC KEY|RSA PUBLIC KEY|CERTIFICATE)-----"
+)
+BCRYPT_MAGICS = (b"RSA1", b"RSA2", b"ECS1", b"ECS3", b"ECK1", b"ECK3")
+KEY_OIDS = (
+    bytes.fromhex("06092a864886f70d010101"),  # rsaEncryption
+    bytes.fromhex("06072a8648ce3d0201"),      # id-ecPublicKey
+    bytes.fromhex("06032b6570"),              # Ed25519
+)
+
+
+def _der_sequence_header(blob: bytes) -> int | None:
+    """Retorna o tamanho do cabecalho se blob for uma SEQUENCE DER consistente."""
+    if len(blob) < 32 or blob[0] != 0x30:
+        return None
+    first = blob[1]
+    if first < 0x80:
+        header, total = 2, first
+    elif 1 <= (first & 0x7F) <= 3:
+        count = first & 0x7F
+        header, total = 2 + count, int.from_bytes(blob[2:2 + count], "big")
+    else:
+        return None
+    return header if header + total == len(blob) else None
+
+
+def is_public_key_blob(blob: bytes, allow_certificate: bool = False) -> bool:
+    """Valida se os bytes decodificados sao material real de chave publica."""
+    if len(blob) >= 32 and blob[:4] in BCRYPT_MAGICS:
+        return True
+    header = _der_sequence_header(blob)
+    if header is None:
+        return False
+    if allow_certificate:
+        return True
+    if any(oid in blob[:64] for oid in KEY_OIDS):  # SPKI (X.509)
+        return True
+    return blob[header] == 0x02  # PKCS#1 RSAPublicKey
+
+
+def decode_key_material(candidate: str) -> bytes | None:
+    """Decodifica PEM/Base64; retorna os bytes somente se forem chave publica valida."""
+    label_certificate = False
+    body = candidate
+    if "-----BEGIN " in candidate:
+        match = re.search(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END", candidate, re.DOTALL)
+        if not match:
+            return None
+        label_certificate = match.group(1) == "CERTIFICATE"
+        body = match.group(2)
+    body = body.replace("\\n", "")
+    body = re.sub(r"\s+", "", body)
+    try:
+        decoded = base64.b64decode(body + "=" * ((4 - len(body) % 4) % 4), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return decoded if is_public_key_blob(decoded, allow_certificate=label_certificate) else None
+
+
+def valid_pem_blocks(raw: bytes) -> list[bytes]:
+    """Blocos PEM completos e decodificaveis (ignora marcadores soltos de bibliotecas)."""
+    blocks = []
+    for match in PEM_BLOCK_RE.finditer(raw):
+        if decode_key_material(match.group(0).decode("ascii", errors="ignore")) is not None:
+            blocks.append(match.group(0))
+    return blocks
+
+
 @dataclass
 class CheckResult:
     code: str
@@ -123,7 +193,10 @@ def candidate_key_values(source_roots: Iterable[Path]) -> list[str]:
         for path in root.rglob("*"):
             if not path.is_file():
                 continue
-            if any(part in {".git", "node_modules", "build", "dist"} for part in path.parts):
+            if any(
+                part in {".git", "node_modules", "build", "dist", ".venv", "venv", "__pycache__", ".gradle", ".pytest_cache"}
+                for part in path.parts
+            ):
                 continue
             try:
                 raw = path.read_bytes()
@@ -144,39 +217,13 @@ def candidate_key_values(source_roots: Iterable[Path]) -> list[str]:
             for match in re.findall(r'"PublicKey(?:Base64|PEM)"\s*:\s*"([^"]+)"', text):
                 candidates.add(match.replace("\\n", "\n"))
 
-    filtered: set[str] = set()
-    for candidate in candidates:
-        if "-----BEGIN " in candidate:
-            filtered.add(candidate)
-            continue
-        compact = candidate.replace("-", "").replace("_", "")
-        if len(compact) >= 40 and re.fullmatch(r"[A-Za-z0-9+/=]+", compact):
-            filtered.add(candidate)
+    filtered: set[str] = {c for c in candidates if decode_key_material(c) is not None}
 
     return sorted(filtered, key=lambda item: (-len(item), item))
 
 
 def candidate_der_blobs(candidates: Iterable[str]) -> list[bytes]:
-    blobs: set[bytes] = set()
-    for candidate in candidates:
-        if "-----BEGIN " not in candidate:
-            try:
-                padded = candidate + "=" * ((4 - len(candidate) % 4) % 4)
-                decoded = base64.b64decode(padded, validate=True)
-                if len(decoded) >= 32:
-                    blobs.add(decoded)
-            except (binascii.Error, ValueError):
-                pass
-
-    for pem in (candidate for candidate in candidates if "-----BEGIN " in candidate):
-        body = re.sub(rb"(?:\r?\n)?-----.*?-----", b"", pem.encode("ascii", errors="ignore"))
-        try:
-            decoded = base64.b64decode(re.sub(rb"\s+", b"", body), validate=True)
-            if len(decoded) >= 32:
-                blobs.add(decoded)
-        except (binascii.Error, ValueError):
-            pass
-
+    blobs = {blob for blob in (decode_key_material(c) for c in candidates) if blob is not None}
     return sorted(blobs, key=lambda item: (-len(item), item))
 
 
@@ -187,10 +234,11 @@ def inspect_raw_artifact(label: str, raw: bytes, candidates: list[str], der_blob
         "plain_candidates": [],
         "der_candidates": [],
     }
-    for marker in PLAIN_MARKERS:
-        count = raw.count(marker)
-        if count:
-            result["pem_markers"].append({"marker": marker.decode("ascii"), "count": count})
+    loose = {m.decode("ascii"): raw.count(m) for m in PLAIN_MARKERS if m in raw}
+    result["loose_markers"] = loose  # informativo: marcadores soltos (ex.: strings de bibliotecas)
+    for block in valid_pem_blocks(raw):
+        marker = block.split(b"-----", 2)[1].decode("ascii")
+        result["pem_markers"].append({"marker": f"BEGIN {marker}", "count": 1})
 
     for candidate in candidates:
         if len(candidate) < 40:
@@ -258,7 +306,7 @@ print("PKPIN_JSON_START:" + json.dumps(out) + ":PKPIN_JSON_END")
 """
 
 
-def run_ghidra(ghidra: Path, binaries: list[tuple[str, bytes]], timeout: float = 180.0) -> tuple[dict[str, Any], str]:
+def run_ghidra(ghidra: Path, binaries: list[tuple[str, bytes]], timeout: float = 900.0) -> tuple[dict[str, Any], str]:
     results: dict[str, Any] = {}
     with tempfile.TemporaryDirectory(prefix="votaai_pkpin_") as temp:
         temp_dir = Path(temp)
@@ -308,11 +356,10 @@ def inspect_desktop(path: Path, source_root: Path, ghidra: Path | None) -> tuple
     scan = inspect_raw_artifact(path.name, raw, candidates, der_blobs)
 
     strings_lines, strings_error = extract_strings(path)
-    strings_markers = []
-    for marker in PLAIN_MARKERS:
-        marker_text = marker.decode("ascii")
-        if marker_text in "\n".join(strings_lines):
-            strings_markers.append(marker_text)
+    strings_markers = [
+        block.split(b"-----", 2)[1].decode("ascii")
+        for block in valid_pem_blocks("\n".join(strings_lines).encode("utf-8", errors="ignore"))
+    ]
 
     # O ELF completo inclui centenas de MB de artefatos PyInstaller.
     # Para a descompilacao Ghidra, usar uma janela inicial de bootloader nativo
@@ -400,9 +447,8 @@ def inspect_mobile(path: Path, source_root: Path, ghidra: Path | None) -> tuple[
             scans.append(inspect_raw_artifact(name, raw, candidates, der_blobs))
             if name.endswith(".so"):
                 binaries.append((name.replace("/", "_"), raw))
-            for marker in PLAIN_MARKERS:
-                if marker in raw:
-                    strings_markers.append(f"{name}:{marker.decode('ascii')}")
+            for block in valid_pem_blocks(raw):
+                strings_markers.append(f"{name}:{block.split(b'-----', 2)[1].decode('ascii')}")
 
     if ghidra is not None:
         ghidra_results, ghidra_error = run_ghidra(ghidra, binaries)
